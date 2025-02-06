@@ -18,6 +18,48 @@ let audioChunks = [];
 let currentUser = null;
 let isGuestMode = false;
 
+// Map initialization function
+function initMap() {
+  if (map) {
+    return; // Map already initialized
+  }
+
+  // Default to London coordinates
+  const initialPosition = [51.5074, -0.1278];
+
+  // Initialize the map
+  map = L.map('map').setView(initialPosition, 15);
+
+  // Add OpenStreetMap tile layer
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  }).addTo(map);
+
+  // Add a draggable marker
+  marker = L.marker(initialPosition, { draggable: true }).addTo(map);
+
+  // Update location input when marker is dragged
+  marker.on('dragend', function (event) {
+    const lat = event.target.getLatLng().lat;
+    const lng = event.target.getLatLng().lng;
+    document.getElementById(
+      'location'
+    ).value = `Latitude: ${lat}, Longitude: ${lng}`;
+  });
+
+  // Add click listener on the map
+  map.on('click', function (e) {
+    const clickedLocation = e.latlng;
+    marker.setLatLng(clickedLocation);
+    const lat = clickedLocation.lat;
+    const lng = clickedLocation.lng;
+    document.getElementById(
+      'location'
+    ).value = `Latitude: ${lat}, Longitude: ${lng}`;
+  });
+}
+
 // Location functions
 function getCurrentLocation() {
   if (navigator.geolocation) {

@@ -44,55 +44,55 @@
       </div>
 
       <div class="app-section" id="app-section" style="display: none;">
-        <div class="user-status">
-          <span id="user-status-text"></span>
-          <button id="sign-out" class="sign-out-btn">Sign Out</button>
-        </div>
-        
-        <div class="input-section">
-          <input type="text" id="task" placeholder="What needs to be done?" />
-          <div class="location-input-group">
-            <div class="location-search">
-              <input type="text" id="location-search" placeholder="Search for a location..." />
-              <div id="search-results" class="search-results"></div>
+        <div class="sidebar">
+          <div class="user-status">
+            <div class="user-avatar">U</div>
+            <div class="user-info">
+              <span id="user-status-text"></span>
             </div>
-            <input type="text" id="location" placeholder="Location" readonly />
-            <div class="location-buttons">
-              <button onclick="getCurrentLocation()">📍 Current Location</button>
-              <button onclick="toggleMap()">🗺️ Select on Map</button>
+            <button id="sign-out" class="sign-out-btn">Sign Out</button>
+          </div>
+          
+          <div class="bookmarks-section">
+            <h3>Saved Locations</h3>
+            <div class="add-bookmark-form">
+              <input type="text" id="bookmark-name" placeholder="Name this location" />
+              <button onclick="addBookmark()">Save Location</button>
             </div>
+            <ul id="bookmarks-list" class="bookmarks-list"></ul>
           </div>
-          <select id="reminder-time" class="reminder-select">
-            <option value="">No reminder</option>
-            <option value="1h">In 1 hour</option>
-            <option value="2h">In 2 hours</option>
-            <option value="4h">In 4 hours</option>
-            <option value="1d">In 1 day</option>
-            <option value="2d">In 2 days</option>
-            <option value="1w">In 1 week</option>
-          </select>
-          <button onclick="addTask()">Add Task</button>
         </div>
-        
-        <div class="bookmarks-section">
-          <h3>Saved Locations</h3>
-          <div class="add-bookmark-form">
-            <input type="text" id="bookmark-name" placeholder="Name this location (e.g., Home, Work)" />
-            <button onclick="addBookmark()">Save Location</button>
+
+        <div class="main-content">
+          <div class="task-input-container">
+            <input type="text" id="task" class="task-input" placeholder="What needs to be done?" />
+            <div class="location-input-group">
+              <div class="location-search">
+                <input type="text" id="location-search" placeholder="Search for a location..." />
+                <div id="search-results" class="search-results"></div>
+              </div>
+              <input type="text" id="location" placeholder="Location" readonly />
+              <div class="location-buttons">
+                <button onclick="getCurrentLocation()" class="location-btn">
+                  <span>📍</span> Current Location
+                </button>
+                <button onclick="toggleMap()" class="location-btn">
+                  <span>🗺️</span> Select on Map
+                </button>
+              </div>
+            </div>
+            <div id="map"></div>
+            <button onclick="addTask()" class="add-task-btn">Add Task</button>
           </div>
-          <ul id="bookmarks-list" class="bookmarks-list"></ul>
-        </div>
-        
-        <div id="map" class="map"></div>
-        
-        <div class="task-list">
-          <h2>Tasks</h2>
-          <div class="task-filters">
-            <button onclick="filterTasks('all')" class="active">All</button>
-            <button onclick="filterTasks('active')">Active</button>
-            <button onclick="filterTasks('completed')">Completed</button>
+
+          <div class="task-list">
+            <div class="task-filters">
+              <button onclick="filterTasks('all')" class="filter-btn active">All</button>
+              <button onclick="filterTasks('active')" class="filter-btn">Active</button>
+              <button onclick="filterTasks('completed')" class="filter-btn">Completed</button>
+            </div>
+            <ul id="tasks"></ul>
           </div>
-          <ul id="tasks"></ul>
         </div>
       </div>
     </div>
