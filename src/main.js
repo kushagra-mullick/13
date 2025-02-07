@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { categorizeTask, analyzeTaskContext, generateTaskSuggestions, processNaturalLanguage, taskCategories } from './services/ai';
+import { startLocationTracking, stopLocationTracking, getCurrentLocationPromise } from './services/geolocation';
 import './style.css';
 
 let tasks = [];
@@ -61,25 +62,19 @@ function initMap() {
 }
 
 // Location functions
-function getCurrentLocation() {
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(function (position) {
-      const latitude = position.coords.latitude;
-      const longitude = position.coords.longitude;
-      const location = `Latitude: ${latitude}, Longitude: ${longitude}`;
-      const locationInput = document.getElementById('location');
-      if (locationInput) locationInput.value = location;
+async function getCurrentLocation() {
+  try {
+    const position = await getCurrentLocationPromise();
+    const location = `Latitude: ${position.latitude}, Longitude: ${position.longitude}`;
+    document.getElementById('location').value = location;
 
-      if (marker && map) {
-        marker.setLatLng([latitude, longitude]);
-        map.setView([latitude, longitude]);
-      }
-    }, function(error) {
-      console.error('Geolocation error:', error);
-      alert('Error getting location: ' + error.message);
-    });
-  } else {
-    alert('Geolocation is not supported by this browser.');
+    // Move marker to the current location if map is initialized
+    if (marker) {
+      marker.setLatLng([position.latitude, position.longitude]);
+    }
+  } catch (error) {
+    console.error('Error getting location:', error);
+    alert('Error getting location: ' + error.message);
   }
 }
 
@@ -508,6 +503,8 @@ async function init() {
       currentUser = session.user;
       showApp();
       await Promise.all([loadTasks(), loadBookmarks()]);
+      // Start location tracking when user is authenticated
+      startLocationTracking();
     } else {
       showAuth();
     }
@@ -518,8 +515,12 @@ async function init() {
         currentUser = session.user;
         showApp();
         await Promise.all([loadTasks(), loadBookmarks()]);
+        // Start location tracking on sign in
+        startLocationTracking();
       } else if (event === 'SIGNED_OUT') {
         currentUser = null;
+        // Stop location tracking on sign out
+        stopLocationTracking();
         showAuth();
       }
     });
