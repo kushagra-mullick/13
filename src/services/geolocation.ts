@@ -3,8 +3,8 @@ import { supabase } from '../supabase';
 // Configuration for geolocation
 const GEOLOCATION_OPTIONS = {
   enableHighAccuracy: true,
-  maximumAge: 30000, // 30 seconds
-  timeout: 27000 // 27 seconds
+  maximumAge: 0, // Don't use cached positions
+  timeout: 10000 // 10 seconds
 };
 
 // Distance threshold for nearby tasks (in meters)
@@ -35,6 +35,34 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
   return R * c;
+}
+
+/**
+ * Handle geolocation errors
+ */
+function handleGeolocationError(error: GeolocationPositionError): never {
+  let message: string;
+  let resolution: string;
+
+  switch (error.code) {
+    case GeolocationPositionError.PERMISSION_DENIED:
+      message = "Location access was denied. Please enable location services in your browser settings.";
+      resolution = "To fix: Click the location icon in your browser's address bar and allow access.";
+      break;
+    case GeolocationPositionError.POSITION_UNAVAILABLE:
+      message = "Unable to determine your location. The GPS signal might be weak or unavailable.";
+      resolution = "Please try: \n1. Moving to an area with better GPS coverage\n2. Checking your device's location settings\n3. Using the manual location input or map selection";
+      break;
+    case GeolocationPositionError.TIMEOUT:
+      message = "Location request timed out. The server took too long to respond.";
+      resolution = "Please try again. If the problem persists, use the manual location input or map selection.";
+      break;
+    default:
+      message = "An unknown error occurred while trying to fetch your location.";
+      resolution = "Please try again or use the manual location input options.";
+  }
+
+  throw new Error(`${message}\n\n${resolution}`);
 }
 
 /**
@@ -88,13 +116,17 @@ function notifyNearbyTasks(tasks: any[]) {
  */
 export function startLocationTracking() {
   if (!navigator.geolocation) {
-    console.error('Geolocation is not supported by this browser.');
-    return;
+    throw new Error('Geolocation is not supported by this browser. Please use a modern browser with geolocation support.');
   }
 
   // Request notification permission
   if ('Notification' in window) {
     Notification.requestPermission();
+  }
+
+  // Check for HTTPS
+  if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+    throw new Error('Geolocation requires a secure connection (HTTPS). Please access this site using HTTPS.');
   }
 
   watchId = navigator.geolocation.watchPosition(
@@ -119,9 +151,7 @@ export function startLocationTracking() {
         checkNearbyTasks(newLocation);
       }
     },
-    (error) => {
-      console.error('Geolocation error:', error);
-    },
+    handleGeolocationError,
     GEOLOCATION_OPTIONS
   );
 }
@@ -143,7 +173,13 @@ export function stopLocationTracking() {
 export function getCurrentLocationPromise(): Promise<Location> {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
-      reject(new Error('Geolocation is not supported by this browser.'));
+      reject(new Error('Geolocation is not supported by this browser. Please use a modern browser with geolocation support.'));
+      return;
+    }
+
+    // Check for HTTPS
+    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+      reject(new Error('Geolocation requires a secure connection (HTTPS). Please access this site using HTTPS.'));
       return;
     }
 
@@ -155,9 +191,7 @@ export function getCurrentLocationPromise(): Promise<Location> {
           timestamp: position.timestamp
         });
       },
-      (error) => {
-        reject(error);
-      },
+      handleGeolocationError,
       GEOLOCATION_OPTIONS
     );
   });

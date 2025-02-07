@@ -3,6 +3,33 @@ import { categorizeTask, analyzeTaskContext, generateTaskSuggestions, processNat
 import { startLocationTracking, stopLocationTracking, getCurrentLocationPromise } from './services/geolocation';
 import './style.css';
 
+// Geolocation options
+const GEOLOCATION_OPTIONS = {
+  enableHighAccuracy: true,
+  timeout: 10000, // 10 seconds
+  maximumAge: 0 // Don't use cached positions
+};
+
+// Error messages for geolocation
+const GEOLOCATION_ERRORS = {
+  PERMISSION_DENIED: {
+    message: "Location access was denied. Please enable location services in your browser settings.",
+    resolution: "To fix: Click the location icon in your browser's address bar and allow access."
+  },
+  POSITION_UNAVAILABLE: {
+    message: "Unable to determine your location. The GPS signal might be weak or unavailable.",
+    resolution: "Try moving to an area with better GPS coverage or check your device's location settings."
+  },
+  TIMEOUT: {
+    message: "Location request timed out. The server took too long to respond.",
+    resolution: "Please try again. If the problem persists, try using the manual location input or map selection."
+  },
+  DEFAULT: {
+    message: "An unknown error occurred while trying to fetch your location.",
+    resolution: "Please try again or use the manual location input options."
+  }
+};
+
 let tasks = [];
 let bookmarks = [];
 let map;
@@ -61,21 +88,107 @@ function initMap() {
   });
 }
 
-// Location functions
 async function getCurrentLocation() {
-  try {
-    const position = await getCurrentLocationPromise();
-    const location = `Latitude: ${position.latitude}, Longitude: ${position.longitude}`;
-    document.getElementById('location').value = location;
-
-    // Move marker to the current location if map is initialized
-    if (marker) {
-      marker.setLatLng([position.latitude, position.longitude]);
-    }
-  } catch (error) {
-    console.error('Error getting location:', error);
-    alert('Error getting location: ' + error.message);
+  // Check if we're using HTTPS or localhost
+  if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+    showLocationError({
+      message: "Geolocation requires a secure connection (HTTPS).",
+      resolution: "Please access this site using HTTPS to use location features."
+    });
+    return;
   }
+
+  // Check if geolocation is supported
+  if (!navigator.geolocation) {
+    showLocationError({
+      message: "Geolocation is not supported by your browser.",
+      resolution: "Please use a modern browser with geolocation support or enter your location manually."
+    });
+    return;
+  }
+
+  try {
+    // Show loading state
+    const locationInput = document.getElementById('location');
+    if (locationInput) {
+      locationInput.value = 'Fetching location...';
+    }
+
+    // Get current position
+    const position = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(
+        resolve,
+        reject,
+        GEOLOCATION_OPTIONS
+      );
+    });
+
+    // Update location input and marker
+    const latitude = position.coords.latitude;
+    const longitude = position.coords.longitude;
+    const location = `Latitude: ${latitude}, Longitude: ${longitude}`;
+    
+    if (locationInput) {
+      locationInput.value = location;
+    }
+
+    // Update marker if map is initialized
+    if (marker && map) {
+      marker.setLatLng([latitude, longitude]);
+      map.setView([latitude, longitude], 15);
+    }
+
+    // Enable manual location input as fallback
+    enableManualLocationInput();
+
+  } catch (error) {
+    console.error('Geolocation error:', error);
+    
+    // Handle specific geolocation errors
+    const errorInfo = GEOLOCATION_ERRORS[error.code === 1 ? 'PERMISSION_DENIED' :
+                                      error.code === 2 ? 'POSITION_UNAVAILABLE' :
+                                      error.code === 3 ? 'TIMEOUT' : 'DEFAULT'];
+    
+    showLocationError(errorInfo);
+    enableManualLocationInput();
+  }
+}
+
+function showLocationError({ message, resolution }) {
+  // Clear any loading state
+  const locationInput = document.getElementById('location');
+  if (locationInput) {
+    locationInput.value = '';
+  }
+
+  // Show error message with resolution steps
+  const errorMessage = `${message}\n\n${resolution}`;
+  alert(errorMessage);
+}
+
+function enableManualLocationInput() {
+  const locationInput = document.getElementById('location');
+  if (locationInput) {
+    locationInput.readOnly = false;
+    locationInput.placeholder = 'Enter coordinates (e.g., Latitude: 51.5074, Longitude: -0.1278)';
+  }
+}
+
+// Validate manually entered coordinates
+function validateCoordinates(input) {
+  const coordPattern = /^Latitude: (-?\d+(\.\d+)?), Longitude: (-?\d+(\.\d+)?)$/;
+  if (!coordPattern.test(input)) {
+    alert('Please enter coordinates in the format: Latitude: XX.XXXX, Longitude: YY.YYYY');
+    return false;
+  }
+  
+  const [lat, lon] = input.match(/-?\d+(\.\d+)?/g).map(Number);
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+    alert('Invalid coordinates. Latitude must be between -90 and 90, and longitude between -180 and 180.');
+    return false;
+  }
+  
+  return true;
 }
 
 function toggleMap() {
@@ -532,6 +645,18 @@ async function init() {
 
 // Initialize the app when the DOM is fully loaded
 document.addEventListener('DOMContentLoaded', init);
+
+// Update location input event listener
+document.addEventListener('DOMContentLoaded', () => {
+  const locationInput = document.getElementById('location');
+  if (locationInput) {
+    locationInput.addEventListener('change', (e) => {
+      if (!e.target.readOnly && !validateCoordinates(e.target.value)) {
+        e.target.value = '';
+      }
+    });
+  }
+});
 
 // Make functions available globally
 window.getCurrentLocation = getCurrentLocation;
