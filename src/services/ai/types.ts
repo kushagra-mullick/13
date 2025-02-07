@@ -1,4 +1,16 @@
-export type TaskCategory = 'work' | 'personal' | 'errands' | 'health' | 'social';
+export type TaskPriority = 'high' | 'medium' | 'low';
+
+export interface TaskSummary {
+  brief: string;
+  keywords: string[];
+  category: string;
+}
+
+export interface LocationPattern {
+  visits: number;
+  timeDistribution: number[];
+  lastVisit: number;
+}
 
 export interface TaskContext {
   time?: Date;
@@ -7,14 +19,14 @@ export interface TaskContext {
     lng: number;
     name?: string;
   };
-  priority?: 'low' | 'medium' | 'high';
+  priority?: TaskPriority;
   recurring?: boolean;
   duration?: number;
 }
 
 export interface TaskSuggestion {
   task: string;
-  category: TaskCategory;
+  category: string;
   context: TaskContext;
   confidence: number;
 }
@@ -28,7 +40,7 @@ export interface VoiceCommand {
 
 export interface AnalyticsData {
   completionRate: number;
-  categoryBreakdown: Record<TaskCategory, number>;
+  categoryBreakdown: Record<string, number>;
   timeOfDayAnalysis: Record<string, number>;
   locationBasedCompletion: Record<string, number>;
   trends: {

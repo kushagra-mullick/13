@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { categorizeTask, analyzeTaskContext, generateTaskSuggestions, processNaturalLanguage, taskCategories } from './services/ai';
+import { taskIntelligence } from './services/ai/task-intelligence';
 import { startLocationTracking, stopLocationTracking, getCurrentLocationPromise } from './services/geolocation';
 import './style.css';
 
@@ -261,13 +261,23 @@ async function addTask() {
   }
 
   try {
+    // Analyze task using AI
+    const taskAnalysis = await taskIntelligence.analyzeTask(taskText, { lat, lng: lon });
+
+    const taskData = {
+      task: taskText,
+      latitude: lat,
+      longitude: lon,
+      priority: taskAnalysis.priority,
+      summary: taskAnalysis.summary,
+      next_steps: taskAnalysis.nextSteps
+    };
+
     if (!isGuestMode && currentUser) {
       const { error } = await supabase
         .from('tasks')
         .insert([{
-          task: taskText,
-          latitude: lat,
-          longitude: lon,
+          ...taskData,
           user_id: currentUser.id
         }]);
 
@@ -276,9 +286,7 @@ async function addTask() {
     } else {
       tasks.unshift({
         id: Date.now(),
-        task: taskText,
-        latitude: lat,
-        longitude: lon,
+        ...taskData,
         created_at: new Date().toISOString(),
         completed: false
       });
@@ -354,13 +362,30 @@ function renderTasks() {
 
   filteredTasks.forEach(task => {
     const li = document.createElement('li');
-    li.className = 'task-item';
+    li.className = `task-item priority-${task.priority || 'medium'}`;
     li.innerHTML = `
       <div class="task-content">
         <input type="checkbox" ${task.completed ? 'checked' : ''} 
                onchange="toggleTaskComplete('${task.id}')">
-        <span class="task-text ${task.completed ? 'completed' : ''}">${task.task}</span>
-        <span class="location-text">📍 ${task.latitude.toFixed(6)}, ${task.longitude.toFixed(6)}</span>
+        <div class="task-details">
+          <span class="task-text ${task.completed ? 'completed' : ''}">${task.task}</span>
+          <span class="task-priority">Priority: ${task.priority || 'medium'}</span>
+          <span class="location-text">📍 ${task.latitude.toFixed(6)}, ${task.longitude.toFixed(6)}</span>
+          ${task.summary ? `
+            <div class="task-summary">
+              <strong>Summary:</strong> ${task.summary.brief}<br>
+              <strong>Category:</strong> ${task.summary.category}
+            </div>
+          ` : ''}
+          ${task.next_steps?.length ? `
+            <div class="next-steps">
+              <strong>Next Steps:</strong>
+              <ul>
+                ${task.next_steps.map(step => `<li>${step}</li>`).join('')}
+              </ul>
+            </div>
+          ` : ''}
+        </div>
       </div>
       <button onclick="deleteTask('${task.id}')" class="delete-btn">Delete</button>
     `;
@@ -457,6 +482,36 @@ function useBookmark(bookmarkId) {
   if (marker && map) {
     marker.setLatLng([bookmark.latitude, bookmark.longitude]);
     map.setView([bookmark.latitude, bookmark.longitude]);
+  }
+}
+
+// Update location tracking to include pattern analysis
+async function handleLocationUpdate(position) {
+  const location = {
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+    timestamp: position.timestamp
+  };
+
+  // Update AI location patterns
+  taskIntelligence.updateLocationPattern({
+    lat: location.latitude,
+    lng: location.longitude,
+    timestamp: location.timestamp
+  });
+
+  // Get location-based suggestions
+  const suggestions = await taskIntelligence.getLocationSuggestions({
+    lat: location.latitude,
+    lng: location.longitude
+  });
+
+  // Show suggestions if available
+  if (suggestions.length && Notification.permission === 'granted') {
+    new Notification('Task Suggestions', {
+      body: suggestions[0],
+      icon: '/vite.svg'
+    });
   }
 }
 

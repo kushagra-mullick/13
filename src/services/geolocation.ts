@@ -22,7 +22,7 @@ let lastLocation: Location | null = null;
 /**
  * Calculate distance between two points using Haversine formula
  */
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3; // Earth's radius in meters
   const φ1 = (lat1 * Math.PI) / 180;
   const φ2 = (lat2 * Math.PI) / 180;
@@ -38,7 +38,34 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 }
 
 /**
- * Handle geolocation errors
+ * Check if geolocation is available and properly configured
+ */
+async function checkGeolocationAvailability(): Promise<void> {
+  // Check if geolocation is supported
+  if (!navigator.geolocation) {
+    throw new Error('Geolocation is not supported by this browser. Please use a modern browser with geolocation support.');
+  }
+
+  // Check for HTTPS (except localhost)
+  if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+    throw new Error('Geolocation requires a secure connection (HTTPS). Please access this site using HTTPS.');
+  }
+
+  // Check permission state
+  if ('permissions' in navigator) {
+    try {
+      const result = await navigator.permissions.query({ name: 'geolocation' });
+      if (result.state === 'denied') {
+        throw new Error('Location access is blocked. Please reset location permissions and refresh the page.');
+      }
+    } catch (error) {
+      console.warn('Permission API not supported, falling back to regular geolocation check');
+    }
+  }
+}
+
+/**
+ * Handle geolocation errors with detailed messages and instructions
  */
 function handleGeolocationError(error: GeolocationPositionError): never {
   let message: string;
@@ -46,21 +73,35 @@ function handleGeolocationError(error: GeolocationPositionError): never {
 
   switch (error.code) {
     case GeolocationPositionError.PERMISSION_DENIED:
-      message = "Location access was denied. Please enable location services in your browser settings.";
-      resolution = "To fix: Click the location icon in your browser's address bar and allow access.";
+      message = "Location access was denied. This might be due to:\n" +
+                "1. Browser location permissions are blocked\n" +
+                "2. Device location services are disabled\n" +
+                "3. The site's permissions were previously denied";
+      resolution = "To fix:\n" +
+                  "1. Click the location icon in your browser's address bar and allow access\n" +
+                  "2. Check your device's location settings\n" +
+                  "3. Clear your browser permissions and try again";
       break;
     case GeolocationPositionError.POSITION_UNAVAILABLE:
       message = "Unable to determine your location. The GPS signal might be weak or unavailable.";
-      resolution = "Please try: \n1. Moving to an area with better GPS coverage\n2. Checking your device's location settings\n3. Using the manual location input or map selection";
+      resolution = "Please try:\n1. Moving to an area with better GPS coverage\n2. Checking your device's location settings";
       break;
     case GeolocationPositionError.TIMEOUT:
       message = "Location request timed out. The server took too long to respond.";
-      resolution = "Please try again. If the problem persists, use the manual location input or map selection.";
+      resolution = "Please try again. If the problem persists, check your internet connection.";
       break;
     default:
       message = "An unknown error occurred while trying to fetch your location.";
-      resolution = "Please try again or use the manual location input options.";
+      resolution = "Please try refreshing the page or using a different browser.";
   }
+
+  // Log error for debugging
+  console.error('Geolocation error:', {
+    code: error.code,
+    message: error.message,
+    details: message,
+    resolution: resolution
+  });
 
   throw new Error(`${message}\n\n${resolution}`);
 }
@@ -112,48 +153,47 @@ function notifyNearbyTasks(tasks: any[]) {
 }
 
 /**
- * Start tracking location
+ * Start tracking location with proper error handling and checks
  */
-export function startLocationTracking() {
-  if (!navigator.geolocation) {
-    throw new Error('Geolocation is not supported by this browser. Please use a modern browser with geolocation support.');
+export async function startLocationTracking() {
+  try {
+    // Perform all necessary checks before requesting location
+    await checkGeolocationAvailability();
+
+    // Request notification permission if needed
+    if ('Notification' in window && Notification.permission === 'default') {
+      await Notification.requestPermission();
+    }
+
+    watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const newLocation: Location = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          timestamp: position.timestamp
+        };
+
+        // Only process if location has changed significantly or enough time has passed
+        if (!lastLocation || 
+            calculateDistance(
+              lastLocation.latitude,
+              lastLocation.longitude,
+              newLocation.latitude,
+              newLocation.longitude
+            ) > 10 || // 10 meters
+            newLocation.timestamp - lastLocation.timestamp > 60000 // 1 minute
+        ) {
+          lastLocation = newLocation;
+          checkNearbyTasks(newLocation);
+        }
+      },
+      handleGeolocationError,
+      GEOLOCATION_OPTIONS
+    );
+  } catch (error) {
+    console.error('Failed to start location tracking:', error);
+    throw error;
   }
-
-  // Request notification permission
-  if ('Notification' in window) {
-    Notification.requestPermission();
-  }
-
-  // Check for HTTPS
-  if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-    throw new Error('Geolocation requires a secure connection (HTTPS). Please access this site using HTTPS.');
-  }
-
-  watchId = navigator.geolocation.watchPosition(
-    (position) => {
-      const newLocation: Location = {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        timestamp: position.timestamp
-      };
-
-      // Only process if location has changed significantly or enough time has passed
-      if (!lastLocation || 
-          calculateDistance(
-            lastLocation.latitude,
-            lastLocation.longitude,
-            newLocation.latitude,
-            newLocation.longitude
-          ) > 10 || // 10 meters
-          newLocation.timestamp - lastLocation.timestamp > 60000 // 1 minute
-      ) {
-        lastLocation = newLocation;
-        checkNearbyTasks(newLocation);
-      }
-    },
-    handleGeolocationError,
-    GEOLOCATION_OPTIONS
-  );
 }
 
 /**
